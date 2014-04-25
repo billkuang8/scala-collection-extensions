@@ -1,0 +1,136 @@
+package com.github.billkuang.collection.extensions
+
+import scala.collection.generic.CanBuildFrom
+import scala.collection.breakOut
+
+class ScalaPairedCollectionExtensions[K, V, I[_]](underlying: I[(K, V)])(implicit toTraversable: I[(K, V)] => Traversable[(K, V)]) {
+
+  def cogroup[W](other: I[(K, W)])(implicit
+    f1: I[K] => Traversable[K],
+    f2: I[V] => Traversable[V],
+    f3: I[(K, W)] => Traversable[(K, W)],
+    f4: I[(K, Seq[V])] => Traversable[(K, Seq[V])],
+    f5: I[(K, Seq[W])] => Traversable[(K, Seq[W])],
+    cbf1: CanBuildFrom[I[(K, V)], (K, (Seq[V], Seq[W])), I[(K, (Seq[V], Seq[W]))]],
+    cbf2: CanBuildFrom[I[(K, V)], K, I[K]],
+    cbf3: CanBuildFrom[I[(K, W)], K, I[K]],
+    cbf4: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]],
+    cbf5: CanBuildFrom[I[(K, W)], (K, Seq[W]), I[(K, Seq[W])]]): I[(K, (Seq[V], Seq[W]))] = {
+
+    (this.getKeys(cbf2).to[Set] union other.getKeys(cbf3).to[Set]).map { key =>
+      val value = (underlying.get(key).getOrElse(Seq.empty[V]), other.get(key).getOrElse(Seq.empty[W]))
+      key -> value
+    }(breakOut)
+  }
+
+  def countByKey(implicit
+    impf: I[(K, Seq[V])] => Traversable[(K, Seq[V])],
+    cbf: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]]): Map[K, Long] = {
+    underlying
+      .groupByKey
+      .map { case (key, seq) => key -> seq.size.toLong }
+      .toMap
+  }
+
+  def foldByKey(zeroValue: V)(f: (V, V) => V)(implicit
+    impf: I[(K, Seq[V])] => Traversable[(K, Seq[V])],
+    cbf1: CanBuildFrom[I[(K, V)], (K, V), I[(K, V)]],
+    cbf2: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]]): I[(K, V)] = {
+    underlying
+      .groupByKey
+      .map { case (key, values) => key -> values.foldLeft(zeroValue)(f) }(breakOut)
+  }
+
+  def getKeys(implicit cbf: CanBuildFrom[I[(K, V)], K, I[K]]): I[K] = underlying.map { _._1 }(breakOut)
+
+  def getValues(implicit cbf: CanBuildFrom[I[(K, V)], V, I[V]]): I[V] = underlying.map { _._2 }(breakOut)
+
+  def groupByKey(implicit cbf: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]]): I[(K, Seq[V])] = {
+    underlying
+      .groupBy { _._1 }
+      .map { case (key, keyValuePairs) => key -> keyValuePairs.map(_._2).to[Vector] }(breakOut)
+  }
+
+  def join[W](other: I[(K, W)])(implicit
+    f1: I[K] => Traversable[K],
+    f2: I[V] => Traversable[V],
+    f3: I[(K, W)] => Traversable[(K, W)],
+    f4: I[(K, Seq[V])] => Traversable[(K, Seq[V])],
+    f5: I[(K, Seq[W])] => Traversable[(K, Seq[W])],
+    f6: I[(K, (Seq[V], Seq[W]))] => Traversable[(K, (Seq[V], Seq[W]))],
+    cbf1: CanBuildFrom[I[(K, V)], (K, (Seq[V], Seq[W])), I[(K, (Seq[V], Seq[W]))]],
+    cbf2: CanBuildFrom[I[(K, V)], K, I[K]],
+    cbf3: CanBuildFrom[I[(K, W)], K, I[K]],
+    cbf4: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]],
+    cbf5: CanBuildFrom[I[(K, W)], (K, Seq[W]), I[(K, Seq[W])]],
+    cbf6: CanBuildFrom[I[(K, V)], (K, (V, W)), I[(K, (V, W))]]): I[(K, (V, W))] = {
+
+    (underlying cogroup other).flatMap { case (key, (underlyingValues, otherValues)) =>
+      for {
+        underlyingItem <- underlyingValues
+        otherItem <- otherValues
+      } yield (key, (underlyingItem, otherItem))
+    }(breakOut)
+  }
+
+  def leftOuterJoin[W](other: I[(K, W)])(implicit
+    f1: I[K] => Traversable[K],
+    f2: I[V] => Traversable[V],
+    f3: I[(K, W)] => Traversable[(K, W)],
+    f4: I[(K, Seq[V])] => Traversable[(K, Seq[V])],
+    f5: I[(K, Seq[W])] => Traversable[(K, Seq[W])],
+    f6: I[(K, (Seq[V], Seq[W]))] => Traversable[(K, (Seq[V], Seq[W]))],
+    cbf1: CanBuildFrom[I[(K, V)], (K, (Seq[V], Seq[W])), I[(K, (Seq[V], Seq[W]))]],
+    cbf2: CanBuildFrom[I[(K, V)], K, I[K]],
+    cbf3: CanBuildFrom[I[(K, W)], K, I[K]],
+    cbf4: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]],
+    cbf5: CanBuildFrom[I[(K, W)], (K, Seq[W]), I[(K, Seq[W])]],
+    cbf6: CanBuildFrom[I[(K, V)], (K, (V, Option[W])), I[(K, (V, Option[W]))]]): I[(K, (V, Option[W]))] = {
+
+    (underlying cogroup other).filter { case (key, (underlyingValues, otherValues)) =>
+      underlyingValues.nonEmpty
+    }.flatMap { case (key, (underlyingValues, otherValues)) =>
+      if (otherValues.isEmpty) underlyingValues map { uv => key -> (uv, None) }
+      else underlyingValues flatMap { uv => otherValues map { ov => key -> (uv, Option(ov)) } }
+    }(breakOut)
+  }
+
+  def rightOuterJoin[W](other: I[(K, W)])(implicit
+    f1: I[K] => Traversable[K],
+    f2: I[V] => Traversable[V],
+    f3: I[(K, W)] => Traversable[(K, W)],
+    f4: I[(K, Seq[V])] => Traversable[(K, Seq[V])],
+    f5: I[(K, Seq[W])] => Traversable[(K, Seq[W])],
+    f6: I[(K, (Seq[V], Seq[W]))] => Traversable[(K, (Seq[V], Seq[W]))],
+    cbf1: CanBuildFrom[I[(K, V)], (K, (Seq[V], Seq[W])), I[(K, (Seq[V], Seq[W]))]],
+    cbf2: CanBuildFrom[I[(K, V)], K, I[K]],
+    cbf3: CanBuildFrom[I[(K, W)], K, I[K]],
+    cbf4: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]],
+    cbf5: CanBuildFrom[I[(K, W)], (K, Seq[W]), I[(K, Seq[W])]],
+    cbf6: CanBuildFrom[I[(K, V)], (K, (Option[V], W)), I[(K, (Option[V], W))]]): I[(K, (Option[V], W))] = {
+
+    (underlying cogroup other).filter { case (key, (underlyingValues, otherValues)) =>
+      otherValues.nonEmpty
+    }.flatMap { case (key, (underlyingValues, otherValues)) =>
+      if (underlyingValues.isEmpty) otherValues map { ov => key -> (None, ov)}
+      else otherValues flatMap { ov => underlyingValues map { uv => key -> (Option(uv), ov) } }
+    }(breakOut)
+  }
+
+  def reduceByKey(f: (V, V) => V)(implicit
+    impf: I[(K, Seq[V])] => Traversable[(K, Seq[V])],
+    cbf1: CanBuildFrom[I[(K, V)], (K, V), I[(K, V)]],
+    cbf2: CanBuildFrom[I[(K, V)], (K, Seq[V]), I[(K, Seq[V])]]): I[(K, V)] = {
+    underlying
+      .groupByKey
+      .map { case (key, values) => key -> values.reduce(f) }(breakOut)
+  }
+
+  private implicit def pairedTraversableToGroupedMap[A, B](pairedTraversable: I[(A, B)])(
+    implicit f1: I[(A, Seq[B])] => Traversable[(A, Seq[B])],
+    f2: I[(A, B)] => Traversable[(A, B)],
+    cbf: CanBuildFrom[I[(A, B)], (A, Seq[B]), I[(A, Seq[B])]]
+    ): Map[A, Seq[B]] = {
+    pairedTraversable.groupByKey.toMap
+  }
+}

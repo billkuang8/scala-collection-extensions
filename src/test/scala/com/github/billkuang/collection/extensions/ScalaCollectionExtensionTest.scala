@@ -1,10 +1,9 @@
-package com.github.billkuang.collection
+package com.github.billkuang.collection.extensions
 
 import org.scalatest.Matchers
 import org.junit.Test
-import com.github.billkuang.collection.Extensions._
 
-class ExtensionsTest extends Matchers {
+class ScalaCollectionExtensionTest extends Matchers {
 
   @Test
   def countByValueTest {
