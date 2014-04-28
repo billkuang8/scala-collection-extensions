@@ -1,7 +1,7 @@
 package com.github.billkuang.collection.extensions
 
 import scala.collection.generic.CanBuildFrom
-import scala.collection._
+import scala.collection.breakOut
 
 class ScalaCollectionExtensions[A, I[_]](underlying: I[A])(implicit toTraversable: I[A] => Traversable[A]) {
 
